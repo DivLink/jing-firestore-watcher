@@ -147,7 +147,7 @@ server.listen(process.env.PORT || 3000, () => {
   console.log(`🚀 Watcher server running on port ${process.env.PORT || 3000}`);
 });
 
-// ── Self-ping every 10 min to prevent Render sleep ────────
+// ── Self-ping every 15 min to save Render free-tier hours ─
 const RENDER_URL = process.env.RENDER_EXTERNAL_URL;
 if (RENDER_URL) {
   setInterval(async () => {
@@ -157,7 +157,7 @@ if (RENDER_URL) {
     } catch (err) {
       console.warn("Self-ping failed:", err.message);
     }
-  }, 10 * 60 * 1000);
+  }, 15 * 60 * 1000); // 15 minutes
 } else {
   console.log("⚠ RENDER_EXTERNAL_URL not set — self-ping disabled");
 }
