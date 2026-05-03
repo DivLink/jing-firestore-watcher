@@ -1,4 +1,5 @@
 const admin = require("firebase-admin");
+const http  = require("http");
 
 // ── Firebase init ──────────────────────────────────────────
 const serviceAccount = {
@@ -76,11 +77,8 @@ function watchCollection(colName, criticalFields) {
 
   db.collection(colName).onSnapshot(
     async (snapshot) => {
-      // First load — build baseline silently
       if (firstLoad) {
-        snapshot.docs.forEach(d => {
-          baseline[d.id] = d.data();
-        });
+        snapshot.docs.forEach(d => { baseline[d.id] = d.data(); });
         firstLoad = false;
         console.log(`✅ Baseline built: ${colName} (${snapshot.docs.length} docs)`);
         return;
@@ -91,18 +89,15 @@ function watchCollection(colName, criticalFields) {
         const newData = change.doc.data();
         const oldData = baseline[docId] ?? null;
 
-        // Update baseline
         if (change.type === "removed") {
           delete baseline[docId];
         } else {
           baseline[docId] = newData;
         }
 
-        // ── DELETED ──
         if (change.type === "removed") {
           await saveAlert({
-            type: "DOCUMENT_DELETED",
-            severity: "critical",
+            type: "DOCUMENT_DELETED", severity: "critical",
             description: `🗑️ Document DELETED from [${colName}] — ID: ${docId}`,
             col: colName, docId,
             changedFields: ["__deleted__"],
@@ -111,15 +106,14 @@ function watchCollection(colName, criticalFields) {
           continue;
         }
 
-        // ── MODIFIED ──
         if (change.type === "modified" && oldData) {
           const allChanged      = getChangedFields(oldData, newData);
           const criticalChanged = allChanged.filter(f => criticalFields.includes(f));
           if (!criticalChanged.length) continue;
 
-          const severity    = getSeverity(criticalChanged);
-          const oldSnap     = {};
-          const newSnap     = {};
+          const severity = getSeverity(criticalChanged);
+          const oldSnap  = {};
+          const newSnap  = {};
           criticalChanged.forEach(f => {
             oldSnap[f] = oldData[f] ?? null;
             newSnap[f] = newData[f] ?? null;
@@ -130,37 +124,47 @@ function watchCollection(colName, criticalFields) {
           ).join(" | ");
 
           await saveAlert({
-            type: "MANUAL_TAMPER",
-            severity,
+            type: "MANUAL_TAMPER", severity,
             description: `⚠ [${colName}] ${description}`,
             col: colName, docId,
             changedFields: criticalChanged,
-            oldData: oldSnap,
-            newData: newSnap,
+            oldData: oldSnap, newData: newSnap,
           });
         }
       }
     },
-    (err) => {
-      console.error(`[${colName} watcher error]`, err.message);
-    }
+    (err) => console.error(`[${colName} watcher error]`, err.message)
   );
 }
 
-// ── Keep-alive HTTP server (required by Render) ────────────
-const http = require("http");
+// ── HTTP server (required by Render) ──────────────────────
 const server = http.createServer((req, res) => {
   res.writeHead(200);
   res.end("JING Watcher is running 24/7");
 });
+
 server.listen(process.env.PORT || 3000, () => {
   console.log(`🚀 Watcher server running on port ${process.env.PORT || 3000}`);
 });
 
-// ── Start watching all collections ────────────────────────
+// ── Self-ping every 10 min to prevent Render sleep ────────
+const RENDER_URL = process.env.RENDER_EXTERNAL_URL;
+if (RENDER_URL) {
+  setInterval(async () => {
+    try {
+      const res = await fetch(RENDER_URL);
+      console.log(`🔄 Self-ping OK (${res.status})`);
+    } catch (err) {
+      console.warn("Self-ping failed:", err.message);
+    }
+  }, 10 * 60 * 1000);
+} else {
+  console.log("⚠ RENDER_EXTERNAL_URL not set — self-ping disabled");
+}
+
+// ── Start watching ─────────────────────────────────────────
 console.log("🔥 JING Firestore Watcher starting...");
 Object.entries(WATCHED).forEach(([colName, fields]) => {
   watchCollection(colName, fields);
 });
-
 console.log("✅ All watchers active — running 24/7 on Render");
