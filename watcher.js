@@ -157,6 +157,19 @@ server.listen(process.env.PORT || 3000, () => {
   console.log(`🚀 Watcher server running on port ${process.env.PORT || 3000}`);
 });
 
+// ── Self-ping every 10 min to prevent sleep ──
+const RENDER_URL = process.env.RENDER_EXTERNAL_URL;
+if (RENDER_URL) {
+  setInterval(async () => {
+    try {
+      await fetch(RENDER_URL);
+      console.log("🔄 Self-ping OK");
+    } catch (err) {
+      console.warn("Self-ping failed:", err.message);
+    }
+  }, 10 * 60 * 1000); // every 10 minutes
+}
+
 // ── Start watching all collections ────────────────────────
 console.log("🔥 JING Firestore Watcher starting...");
 Object.entries(WATCHED).forEach(([colName, fields]) => {
