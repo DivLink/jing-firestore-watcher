@@ -42,20 +42,9 @@ function getChangedFields(before = {}, after = {}) {
   return changed;
 }
 
-  const pendingSaves = new Set();
-
-  async function saveAlert({ type, severity, description, col, docId, changedFields, oldData, newData }) {
-    try {
-      // Dedup — skip if same alert fired in last 10 seconds
-      const dedupKey = `${col}:${docId}:${(changedFields ?? []).sort().join(",")}`;
-      if (pendingSaves.has(dedupKey)) {
-        console.log(`[DEDUP] Skipped duplicate: ${dedupKey}`);
-        return;
-      }
-      pendingSaves.add(dedupKey);
-      setTimeout(() => pendingSaves.delete(dedupKey), 10_000);
-
-      await db.collection("systemAlerts").add({
+async function saveAlert({ type, severity, description, col, docId, changedFields, oldData, newData }) {
+  try {
+    await db.collection("systemAlerts").add({
       type,
       severity,
       description,
